@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>直播</title>
+  <link rel="icon" href="data:,">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #1f2430;
+      --muted: #8a93a6;
+      --accent: #3b82f6;
+      --accent-dark: #2563eb;
+      --danger: #ef4444;
+      --border: #e5e9f2;
+      --other: #eef1f7;
+      --green: #22c55e;
+    }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .hidden { display: none !important; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 11px 18px;
+      transition: background .15s;
+    }
+    .btn.primary { background: var(--accent); color: #fff; }
+    .btn.primary:hover { background: var(--accent-dark); }
+    .btn.ghost { background: #fff; color: var(--accent); border: 1px solid var(--border); }
+    .btn.ghost:hover { background: #eff6ff; border-color: var(--accent); }
+    .btn.danger { background: var(--danger); color: #fff; }
+    .btn.danger:hover { background: #dc2626; }
+
+    /* Entry */
+    .card {
+      width: min(92vw, 420px);
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(31, 41, 55, .12);
+      padding: 40px 36px;
+    }
+    .card h1 { font-size: 26px; margin-bottom: 8px; letter-spacing: 1px; }
+    .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 26px; line-height: 1.7; }
+    .card label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .card input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color .15s;
+      margin-bottom: 14px;
+    }
+    .card input:focus { border-color: var(--accent); }
+    .card .btn { width: 100%; margin-top: 8px; }
+    .card .tip { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.7; }
+
+    /* App (studio / watch) */
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: min(96vw, 1080px);
+      height: min(94vh, 720px);
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(31, 41, 55, .12);
+      overflow: hidden;
+    }
+    .app header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 18px;
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      flex: none;
+    }
+    .app header .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; flex: none; }
+    .app header .dot.ok { background: var(--green); box-shadow: 0 0 0 3px rgba(34, 197, 94, .18); }
+    .app header .title { font-weight: 600; font-size: 16px; }
+    .app header .status { font-size: 12px; color: var(--muted); }
+    .app header .status.ok { color: var(--green); }
+    .app header .spacer { flex: 1; }
+    .app header .online { font-size: 13px; color: var(--muted); }
+    .app header .btn { font-size: 13px; padding: 8px 13px; }
+
+    .app main { display: flex; flex: 1; min-height: 0; }
+    .stage {
+      flex: 1;
+      min-width: 0;
+      background: #0f1420;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .stage video { width: 100%; height: 100%; object-fit: contain; background: #0f1420; }
+    .stage .placeholder { color: #8b93a7; font-size: 15px; text-align: center; padding: 0 20px; line-height: 1.9; }
+    .side {
+      width: 280px;
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+      background: #fafbfe;
+      min-height: 0;
+    }
+    .side h3 { font-size: 13px; color: var(--muted); font-weight: 600; padding: 14px 16px 8px; flex: none; }
+    .side .viewer-list { padding: 0 16px 10px; max-height: 96px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+    .viewer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+    }
+    .viewer .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+    .side .msgs { flex: 1; overflow-y: auto; padding: 8px 16px; border-top: 1px solid var(--border); min-height: 0; }
+    .msg { margin-bottom: 10px; }
+    .msg .meta { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+    .msg .bubble {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+      white-space: pre-wrap;
+      background: var(--other);
+      max-width: 100%;
+    }
+    .msg.mine { text-align: right; }
+    .msg.mine .bubble { background: var(--accent); color: #fff; border-top-right-radius: 3px; }
+    .msg.sys { text-align: center; margin: 6px 0; }
+    .msg.sys span { display: inline-block; background: #eef2f9; color: var(--muted); font-size: 11px; padding: 3px 10px; border-radius: 20px; }
+    .inputbar { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex: none; }
+    .inputbar input {
+      flex: 1;
+      min-width: 0;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+    }
+    .inputbar input:focus { border-color: var(--accent); }
+    .inputbar .btn { padding: 9px 14px; font-size: 14px; }
+
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2430;
+      color: #fff;
+      border-radius: 20px;
+      padding: 8px 18px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+      z-index: 100;
+    }
+    #toast.show { opacity: 1; }
+
+    @media (max-width: 720px) {
+      .app main { flex-direction: column; }
+      .side { width: 100%; height: 220px; border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 入口 -->
+  <div id="entry" class="card">
+    <h1>直播</h1>
+    <div class="sub">端到端加密实时直播。只需填写直播间名字，即可开播或观看，无需注册。</div>
+    <label for="room">直播间名字</label>
+    <input id="room" type="text" maxlength="40" placeholder="例如：我的直播间" autocomplete="off">
+    <button id="broadcast-btn" class="btn primary">🎥 开播</button>
+    <button id="watch-btn" class="btn ghost">👀 观看直播</button>
+    <div class="tip">直播画面与声音通过 WebRTC 端到端加密直接传输（DTLS-SRTP），服务器只负责信令与聊天转发。</div>
+  </div>
+
+  <!-- 主播台 -->
+  <div id="studio" class="app hidden">
+    <header>
+      <span id="s-dot" class="dot"></span>
+      <span id="s-room" class="title">room</span>
+      <span id="s-status" class="status">连接中…</span>
+      <span class="spacer"></span>
+      <span class="online">观看 <b id="s-viewers">0</b> 人</span>
+      <button id="start-btn" class="btn primary">开始直播</button>
+      <button id="stop-btn" class="btn danger hidden">停止直播</button>
+      <button id="s-leave" class="btn ghost">退出</button>
+    </header>
+    <main>
+      <section class="stage">
+        <video id="local-video" autoplay muted playsinline></video>
+        <div id="s-placeholder" class="placeholder">点击"开始直播"按钮，开启摄像头与麦克风<br>视频将通过 WebRTC 端到端加密传输给观众</div>
+      </section>
+      <aside class="side">
+        <h3>观看列表</h3>
+        <div class="viewer-list" id="s-viewer-list"></div>
+        <h3>聊天</h3>
+        <div id="s-chat" class="msgs"></div>
+        <div class="inputbar">
+          <input id="s-msg" type="text" maxlength="500" placeholder="说点什么…" autocomplete="off">
+          <button id="s-send" class="btn primary">发送</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- 观众台 -->
+  <div id="watch" class="app hidden">
+    <header>
+      <span id="w-dot" class="dot"></span>
+      <span id="w-room" class="title">room</span>
+      <span id="w-status" class="status">连接中…</span>
+      <span class="spacer"></span>
+      <button id="w-leave" class="btn ghost">退出</button>
+    </header>
+    <main>
+      <section class="stage">
+        <video id="remote-video" autoplay playsinline></video>
+        <div id="w-placeholder" class="placeholder">等待主播开播…<br>画面与声音通过 WebRTC 端到端加密传输</div>
+      </section>
+      <aside class="side">
+        <h3>聊天</h3>
+        <div id="w-chat" class="msgs"></div>
+        <div class="inputbar">
+          <input id="w-msg" type="text" maxlength="500" placeholder="说点什么…" autocomplete="off">
+          <button id="w-send" class="btn primary">发送</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toast"></div>
+  <script src="./bundle.js?v=1"></script>
+</body>
+</html>
