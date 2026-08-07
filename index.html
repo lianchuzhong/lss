@@ -200,11 +200,13 @@
   <div id="entry" class="card">
     <h1>直播</h1>
     <div class="sub">端到端加密实时直播。只需填写直播间名字，即可开播或观看，无需注册。</div>
+    <label for="nick">昵称（可选，留空自动生成并记住）</label>
+    <input id="nick" type="text" maxlength="20" placeholder="例如：小明" autocomplete="off">
     <label for="room">直播间名字</label>
     <input id="room" type="text" maxlength="40" placeholder="例如：我的直播间" autocomplete="off">
     <button id="broadcast-btn" class="btn primary">🎥 开播</button>
     <button id="watch-btn" class="btn ghost">👀 观看直播</button>
-    <div class="tip">直播画面与声音通过 WebRTC 端到端加密直接传输（DTLS-SRTP），服务器只负责信令与聊天转发。</div>
+    <div class="tip">昵称与上次的直播间会被记住，下次刷新无需再输入。<br>直播画面与声音通过 WebRTC 端到端加密直接传输（DTLS-SRTP），服务器只负责信令与聊天转发。</div>
   </div>
 
   <!-- 主播台 -->

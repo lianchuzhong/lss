@@ -13,12 +13,15 @@ const ICE_SERVERS = [
 ]
 const HEARTBEAT_MS = 8000
 const STALE_MS = 25000
+const LS_NICK = 'lss_nick'
+const LS_ROOM = 'lss_room'
 
 const $ = (id) => document.getElementById(id)
 
 const entryEl = $('entry')
 const studioEl = $('studio')
 const watchEl = $('watch')
+const nickInput = $('nick')
 const roomInput = $('room')
 const broadcastBtn = $('broadcast-btn')
 const watchBtn = $('watch-btn')
@@ -51,7 +54,7 @@ let client = null
 let room = null
 let role = null
 let myId = uid()
-let myName = '观众-' + Math.random().toString(36).slice(2, 6)
+let myName = randomName()
 let localStream = null
 let pcs = new Map()
 let pc = null
@@ -69,6 +72,12 @@ let seenIds = new Set()
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
+}
+
+function randomName() {
+  const adj = ['快乐', '活泼', '机灵', '元气', '热心', '安静', '勇敢', '阳光', '神秘', '可爱', '潇洒', '淡定', '幽默', '执着', '温柔', '自由']
+  const noun = ['布丁', '柚子', '小猫', '海豚', '星辰', '饼干', '雨滴', '竹叶', '星河', '月亮', '云朵', '松果', '晚风', '柠檬', '奶茶', '晴天']
+  return adj[Math.floor(Math.random() * adj.length)] + noun[Math.floor(Math.random() * noun.length)] + '-' + (100 + Math.floor(Math.random() * 900))
 }
 
 function sanitizeRoom(raw) {
@@ -130,6 +139,13 @@ function enter(mode) {
   const r = sanitizeRoom(roomInput.value)
   room = r
   role = mode
+  const name = nickInput.value.trim()
+  if (name) myName = name
+  else myName = randomName()
+  try {
+    localStorage.setItem(LS_NICK, myName)
+    localStorage.setItem(LS_ROOM, roomInput.value.trim())
+  } catch (_) {}
   chatKey = null
   deriveChatKey(r).then((k) => { chatKey = k })
 
@@ -180,7 +196,7 @@ function onConnect() {
 }
 
 function publishHostPresence() {
-  client.publish(hostTopic(), JSON.stringify({ id: myId, name: '主播', t: Date.now(), online: true }), { qos: 1, retain: true })
+  client.publish(hostTopic(), JSON.stringify({ id: myId, name: myName, t: Date.now(), online: true }), { qos: 1, retain: true })
 }
 
 function publishViewerPresence() {
@@ -446,7 +462,7 @@ async function sendChat() {
   const input = role === 'host' ? sMsg : wMsg
   const text = input.value.trim()
   if (!text || !client) return
-  const base = { id: uid(), sender: role === 'host' ? '主播' : myName, t: Date.now() }
+  const base = { id: uid(), sender: myName, t: Date.now() }
   let wire
   if (chatKey) {
     const enc = await encryptChat(text)
@@ -489,7 +505,7 @@ function renderMsg(m) {
     wrap.appendChild(s)
     return wrap
   }
-  const mine = (role === 'host' && m.sender === '主播') || (role === 'viewer' && m.sender === myName)
+  const mine = m.sender === myName
   wrap.className = 'msg' + (mine ? ' mine' : '')
   const meta = document.createElement('div')
   meta.className = 'meta'
@@ -594,6 +610,11 @@ watchBtn.addEventListener('click', () => enter('viewer'))
 roomInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); enter('host') }
 })
+try {
+  nickInput.value = localStorage.getItem(LS_NICK) || ''
+  roomInput.value = localStorage.getItem(LS_ROOM) || ''
+  if (!nickInput.value) nickInput.placeholder = '昵称（留空自动生成，例如 ' + randomName() + '）'
+} catch (_) {}
 startBtn.addEventListener('click', startBroadcast)
 stopBtn.addEventListener('click', stopBroadcast)
 sLeave.addEventListener('click', teardown)
