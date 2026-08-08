@@ -6,16 +6,22 @@
 
 - 访客无需注册，直接上传 **1 个视频或图片**。
 - 可填写**价格**、**联系方式**、**留言内容**。
-- 提交成功后，媒体文件保存在 GitHub 仓库的 `uploads/`，留言元数据保存在 `data/posts/`（即“GitHub 后台”）。
-- 首页自动列出所有留言，最新在前。
+- **端到端加密（E2EE）**：所有留言内容（文字 + 文件）都用随机的 AES-256-GCM 密钥加密，密钥再用站长 RSA-2048 公钥（RSA-OAEP）包裹后上传。
+- **仅站长可解密**：服务器、GitHub 仓库、任何中间人看到的都只是密文；只有站长在页面粘贴自己的私钥解锁后，才能看到真实文字与视频/图片。
+- 私钥只保存在站长本人浏览器的 localStorage 中，不会上传。
+
+## 站长密钥
+
+- 私钥文件：`桌面\留言板站长私钥.pem`（**请自行备份，切勿提交到仓库或发给任何人**）。
+- 公钥已内嵌在 `src/app.js` 顶部的 `OWNER_PUBLIC_KEY_PEM` 中（公钥公开无风险）。
 
 ## 架构
 
 | 组件 | 用途 |
 | ---- | ---- |
 | GitHub Pages | 托管静态页面（index.html + bundle.js） |
-| Cloudflare Worker | 转发接口，内部持有 GitHub token（不暴露给浏览器） |
-| GitHub repo | 存储上传的媒体（uploads/）与留言元数据（data/posts/） |
+| Cloudflare Worker | 转发接口，内部持有 GitHub token（不暴露给浏览器）；提供 `/api/media` 直接转发媒体密文 |
+| GitHub repo | 存储加密后的媒体（uploads/）与加密留言（data/posts/） |
 | esbuild | 把 src/app.js 打包为 bundle.js |
 
 ## 部署
@@ -26,6 +32,7 @@
 
 ```bash
 npm install
+npx wrangler login        # 浏览器登录 Cloudflare
 npx wrangler secret put GITHUB_TOKEN   # 输入你的 GitHub Personal Access Token
 npx wrangler deploy
 ```
@@ -47,6 +54,10 @@ npm run build
 
 > 注意：GitHub Pages 需要在仓库 Settings → Pages 中开启，Source 选择主分支根目录。
 
+### 4. 站长查看留言
+
+打开站点 → 点右上角「🔑 站长查看」→ 粘贴或选择 `留言板站长私钥.pem` → 解锁后可查看全部明文留言与媒体。
+
 ## 本地开发
 
 ```bash
@@ -57,5 +68,5 @@ npm run dev --prefix worker   # 本地调试 Worker
 
 ## 限流说明
 
-- GitHub Contents API 单文件上限 100MB，前端限制单文件 95MB。
-- 上传为明文媒体，仓库公开则访客可直接访问文件，请勿上传隐私敏感内容（token 始终只存在于 Worker 环境变量中）。
+- 浏览器侧单文件最大 95MB（GitHub Contents API 单文件上限 100MB）。
+- 存储的全部为密文；站长私钥始终只在你本机，不参与任何网络传输。
