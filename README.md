@@ -1,39 +1,61 @@
-# 直播（LSS Live）
+# 留言板（Video / Image Message Board）
 
-端到端加密的实时直播网站，纯静态托管（GitHub Pages），无需后端服务器。
+纯静态托管（GitHub Pages）+ Cloudflare Worker 后台转发，无需自建服务器。
 
-## 使用
+## 功能
 
-打开页面，只需填写**直播间名字**：
-
-- **开播**：进入主播台，点"开始直播"，授权摄像头/麦克风后即可推流。
-- **观看**：进入观众台，主播开播后自动连接观看。
-
-所有进入同一直播间名字的人即可互看。直播间名字即"房间钥匙"。
-
-## 加密原理
-
-- **画面/声音**：使用 WebRTC（DTLS-SRTP）端到端加密，媒体流在主播与观众之间**点对点直接传输**，不经过任何服务器，服务器拿不到视频和音频内容。
-- **聊天**：消息正文使用 AES-256-GCM 加密，密钥由直播间名字经 PBKDF2 派生，转发服务器（公共 MQTT broker）只能看到密文。
-- 公共 MQTT broker 仅用于：信令交换（SDP/ICE）、主播/观众在线状态、加密聊天转发。
+- 访客无需注册，直接上传 **1 个视频或图片**。
+- 可填写**价格**、**联系方式**、**留言内容**。
+- 提交成功后，媒体文件保存在 GitHub 仓库的 `uploads/`，留言元数据保存在 `data/posts/`（即“GitHub 后台”）。
+- 首页自动列出所有留言，最新在前。
 
 ## 架构
 
 | 组件 | 用途 |
 | ---- | ---- |
-| WebRTC + DTLS-SRTP | 音视频端到端加密传输（P2P） |
-| MQTT（公共 broker） | 信令、在线状态、聊天转发 |
-| AES-GCM + PBKDF2 | 聊天正文端到端加密 |
+| GitHub Pages | 托管静态页面（index.html + bundle.js） |
+| Cloudflare Worker | 转发接口，内部持有 GitHub token（不暴露给浏览器） |
+| GitHub repo | 存储上传的媒体（uploads/）与留言元数据（data/posts/） |
+| esbuild | 把 src/app.js 打包为 bundle.js |
+
+## 部署
+
+### 1. 部署 Cloudflare Worker
+
+在 `worker/` 目录：
+
+```bash
+npm install
+npx wrangler secret put GITHUB_TOKEN   # 输入你的 GitHub Personal Access Token
+npx wrangler deploy
+```
+
+部署成功后得到 Worker 地址（类似 `https://lss-board.<你的子域>.workers.dev`）。
+
+### 2. 配置前端
+
+将 `src/app.js` 顶部的 `WORKER_BASE` 改成你的 Worker 地址，然后：
+
+```bash
+npm install
+npm run build
+```
+
+### 3. 推送 GitHub
+
+把改动提交并推送到仓库默认分支（`main`），GitHub Pages 即自动生效。
+
+> 注意：GitHub Pages 需要在仓库 Settings → Pages 中开启，Source 选择主分支根目录。
 
 ## 本地开发
 
 ```bash
 npm install
-npm run build   # 生成 bundle.js
+npm run build       # 生成 bundle.js
+npm run dev --prefix worker   # 本地调试 Worker
 ```
 
-## 限制
+## 限流说明
 
-- 媒体为 P2P 直连，适合小规模观众；主播上行带宽随观众数量增长。
-- 依赖 STUN/TURN 打洞，网络环境苛刻（对称 NAT / 严格防火墙）时可能无法连通，建议主播开启端口转发或使用可用的 TURN 服务。
-- 一对一加密基于 DTLS 传输层；聊天密钥由房间名派生，故"知道房间名"即可进入，安全性取决于直播间名字的私密性。
+- GitHub Contents API 单文件上限 100MB，前端限制单文件 95MB。
+- 上传为明文媒体，仓库公开则访客可直接访问文件，请勿上传隐私敏感内容（token 始终只存在于 Worker 环境变量中）。

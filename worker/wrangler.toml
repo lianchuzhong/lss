@@ -1,0 +1,8 @@
+name = "lss-board"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+GITHUB_OWNER = "lianchuzhong"
+GITHUB_REPO = "lss"
+GITHUB_BRANCH = "main"

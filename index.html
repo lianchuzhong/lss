@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>直播</title>
+  <title>留言板</title>
   <link rel="icon" href="data:,">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -24,9 +24,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       background: var(--bg);
       color: var(--text);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      padding: 24px 12px 60px;
     }
     .hidden { display: none !important; }
 
@@ -47,21 +45,28 @@
     .btn.primary:hover { background: var(--accent-dark); }
     .btn.ghost { background: #fff; color: var(--accent); border: 1px solid var(--border); }
     .btn.ghost:hover { background: #eff6ff; border-color: var(--accent); }
-    .btn.danger { background: var(--danger); color: #fff; }
-    .btn.danger:hover { background: #dc2626; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .btn.block { width: 100%; }
 
-    /* Entry */
+    .wrap { width: min(100%, 880px); margin: 0 auto; }
+
+    .hero { text-align: center; margin: 12px 0 26px; }
+    .hero h1 { font-size: 28px; letter-spacing: 1px; }
+    .hero .sub { color: var(--muted); font-size: 14px; margin-top: 10px; line-height: 1.7; }
+
+    /* form card */
     .card {
-      width: min(92vw, 420px);
       background: var(--card);
       border-radius: 16px;
       box-shadow: 0 12px 40px rgba(31, 41, 55, .12);
-      padding: 40px 36px;
+      padding: 26px 26px;
+      margin-bottom: 26px;
     }
-    .card h1 { font-size: 26px; margin-bottom: 8px; letter-spacing: 1px; }
-    .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 26px; line-height: 1.7; }
-    .card label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-    .card input {
+    .card label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; margin-top: 14px; }
+    .card label:first-child { margin-top: 0; }
+    .card input[type="text"],
+    .card input[type="number"],
+    .card textarea {
       width: 100%;
       padding: 11px 14px;
       border: 1px solid var(--border);
@@ -69,107 +74,120 @@
       font-size: 15px;
       outline: none;
       transition: border-color .15s;
-      margin-bottom: 14px;
+      font-family: inherit;
     }
-    .card input:focus { border-color: var(--accent); }
-    .card .btn { width: 100%; margin-top: 8px; }
-    .card .tip { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.7; }
+    .card textarea { resize: vertical; min-height: 74px; }
+    .card input:focus, .card textarea:focus { border-color: var(--accent); }
 
-    /* App (studio / watch) */
-    .app {
-      display: flex;
-      flex-direction: column;
-      width: min(96vw, 1080px);
-      height: min(94vh, 720px);
-      background: var(--card);
-      border-radius: 16px;
-      box-shadow: 0 12px 40px rgba(31, 41, 55, .12);
-      overflow: hidden;
-    }
-    .app header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 0 18px;
-      height: 56px;
-      border-bottom: 1px solid var(--border);
-      flex: none;
-    }
-    .app header .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; flex: none; }
-    .app header .dot.ok { background: var(--green); box-shadow: 0 0 0 3px rgba(34, 197, 94, .18); }
-    .app header .title { font-weight: 600; font-size: 16px; }
-    .app header .status { font-size: 12px; color: var(--muted); }
-    .app header .status.ok { color: var(--green); }
-    .app header .spacer { flex: 1; }
-    .app header .online { font-size: 13px; color: var(--muted); }
-    .app header .btn { font-size: 13px; padding: 8px 13px; }
-
-    .app main { display: flex; flex: 1; min-height: 0; }
-    .stage {
-      flex: 1;
-      min-width: 0;
-      background: #0f1420;
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-    .stage video { width: 100%; height: 100%; object-fit: contain; background: #0f1420; }
-    .stage .placeholder { color: #8b93a7; font-size: 15px; text-align: center; padding: 0 20px; line-height: 1.9; }
-    .side {
-      width: 280px;
-      flex: none;
-      display: flex;
-      flex-direction: column;
-      border-left: 1px solid var(--border);
-      background: #fafbfe;
-      min-height: 0;
-    }
-    .side h3 { font-size: 13px; color: var(--muted); font-weight: 600; padding: 14px 16px 8px; flex: none; }
-    .side .viewer-list { padding: 0 16px 10px; max-height: 96px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; }
-    .viewer {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: var(--muted);
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 3px 10px;
-    }
-    .viewer .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
-    .side .msgs { flex: 1; overflow-y: auto; padding: 8px 16px; border-top: 1px solid var(--border); min-height: 0; }
-    .msg { margin-bottom: 10px; }
-    .msg .meta { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
-    .msg .bubble {
-      display: inline-block;
-      padding: 8px 12px;
+    .upload {
+      margin-top: 14px;
+      border: 1.5px dashed var(--border);
       border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      color: var(--muted);
       font-size: 14px;
-      line-height: 1.5;
-      word-break: break-word;
-      white-space: pre-wrap;
-      background: var(--other);
-      max-width: 100%;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      position: relative;
     }
-    .msg.mine { text-align: right; }
-    .msg.mine .bubble { background: var(--accent); color: #fff; border-top-right-radius: 3px; }
-    .msg.sys { text-align: center; margin: 6px 0; }
-    .msg.sys span { display: inline-block; background: #eef2f9; color: var(--muted); font-size: 11px; padding: 3px 10px; border-radius: 20px; }
-    .inputbar { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex: none; }
-    .inputbar input {
-      flex: 1;
-      min-width: 0;
-      padding: 9px 12px;
+    .upload:hover { border-color: var(--accent); background: #eff6ff; }
+    .upload .u-icon { font-size: 26px; display: block; margin-bottom: 6px; }
+    .upload input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+    .preview { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .preview .file {
+      position: relative;
       border: 1px solid var(--border);
       border-radius: 10px;
-      font-size: 14px;
-      outline: none;
+      overflow: hidden;
+      background: #0f1420;
+      min-width: 140px;
     }
-    .inputbar input:focus { border-color: var(--accent); }
-    .inputbar .btn { padding: 9px 14px; font-size: 14px; }
+    .preview .file video, .preview .file img { display: block; max-width: 260px; max-height: 170px; object-fit: contain; }
+    .preview .file .name { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(15, 20, 32, .72); color: #fff; font-size: 11px; padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .preview .file .x {
+      position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(0,0,0,.55); color: #fff; border: none; cursor: pointer; font-size: 13px; line-height: 1;
+    }
+
+    .form-row { display: flex; gap: 12px; }
+    .form-row > div { flex: 1; }
+
+    .submit-wrap { margin-top: 18px; }
+    .status-bar { margin-top: 12px; font-size: 13px; color: var(--muted); text-align: center; }
+    .status-bar .ok { color: var(--green); }
+    .status-bar .err { color: var(--danger); }
+
+    /* posts */
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .section-title .cnt {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      background: var(--other);
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+    .refresh { margin-left: auto; font-size: 12px; padding: 7px 12px; }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      padding: 44px 0;
+      background: var(--card);
+      border-radius: 16px;
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .post {
+      background: var(--card);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 6px 22px rgba(31, 41, 55, .10);
+      display: flex;
+      flex-direction: column;
+    }
+    .post .media { background: #0f1420; position: relative; }
+    .post .media video, .post .media img { display: block; width: 100%; height: 190px; object-fit: cover; }
+    .post .media video { object-fit: contain; background: #0f1420; }
+    .post .media .tag {
+      position: absolute; top: 8px; left: 8px;
+      background: rgba(0,0,0,.55); color: #fff; font-size: 11px;
+      padding: 3px 9px; border-radius: 20px;
+    }
+    .post .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .post .price {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .post .contact {
+      font-size: 13px;
+      color: var(--text);
+      background: var(--other);
+      border-radius: 8px;
+      padding: 7px 10px;
+      word-break: break-all;
+    }
+    .post .msg {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      flex: 1;
+    }
+    .post .meta { font-size: 12px; color: var(--muted); display: flex; align-items: center; }
+    .post .meta .name { font-weight: 600; color: var(--text); margin-right: auto; }
 
     #toast {
       position: fixed;
@@ -185,86 +203,65 @@
       pointer-events: none;
       transition: opacity .25s;
       z-index: 100;
+      max-width: 90vw;
     }
     #toast.show { opacity: 1; }
 
-    @media (max-width: 720px) {
-      .app main { flex-direction: column; }
-      .side { width: 100%; height: 220px; border-left: none; border-top: 1px solid var(--border); }
+    @media (max-width: 520px) {
+      .form-row { flex-direction: column; gap: 0; }
     }
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>留言板</h1>
+      <div class="sub">上传视频或图片，写明价格与联系方式。<br>提交成功后会自动保存到网站后台(GitHub)，其他人即可看到并联系你。</div>
+    </div>
 
-  <!-- 入口 -->
-  <div id="entry" class="card">
-    <h1>直播</h1>
-    <div class="sub">端到端加密实时直播。只需填写直播间名字，即可开播或观看，无需注册。</div>
-    <label for="nick">昵称（可选，留空自动生成并记住）</label>
-    <input id="nick" type="text" maxlength="20" placeholder="例如：小明" autocomplete="off">
-    <label for="room">直播间名字</label>
-    <input id="room" type="text" maxlength="40" placeholder="例如：我的直播间" autocomplete="off">
-    <button id="broadcast-btn" class="btn primary">🎥 开播</button>
-    <button id="watch-btn" class="btn ghost">👀 观看直播</button>
-    <div class="tip">昵称与上次的直播间会被记住，下次刷新无需再输入。<br>直播画面与声音通过 WebRTC 端到端加密直接传输（DTLS-SRTP），服务器只负责信令与聊天转发。</div>
-  </div>
+    <!-- 发布表单 -->
+    <div class="card">
+      <label>昵称（可选）</label>
+      <input id="name" type="text" maxlength="20" placeholder="例如：老范" autocomplete="off">
 
-  <!-- 主播台 -->
-  <div id="studio" class="app hidden">
-    <header>
-      <span id="s-dot" class="dot"></span>
-      <span id="s-room" class="title">room</span>
-      <span id="s-status" class="status">连接中…</span>
-      <span class="spacer"></span>
-      <span class="online">观看 <b id="s-viewers">0</b> 人</span>
-      <button id="start-btn" class="btn primary">开始直播</button>
-      <button id="stop-btn" class="btn danger hidden">停止直播</button>
-      <button id="s-leave" class="btn ghost">退出</button>
-    </header>
-    <main>
-      <section class="stage">
-        <video id="local-video" autoplay muted playsinline></video>
-        <div id="s-placeholder" class="placeholder">点击"开始直播"按钮，开启摄像头与麦克风<br>视频将通过 WebRTC 端到端加密传输给观众</div>
-      </section>
-      <aside class="side">
-        <h3>观看列表</h3>
-        <div class="viewer-list" id="s-viewer-list"></div>
-        <h3>聊天</h3>
-        <div id="s-chat" class="msgs"></div>
-        <div class="inputbar">
-          <input id="s-msg" type="text" maxlength="500" placeholder="说点什么…" autocomplete="off">
-          <button id="s-send" class="btn primary">发送</button>
+      <div class="upload" id="drop">
+        <span class="u-icon">📤</span>
+        点击选择或拖入 1 个视频或图片（支持 mp4 / jpg / png 等，单个最大约 90MB）
+        <input id="file" type="file" accept="image/*,video/*">
+      </div>
+      <div class="preview" id="preview"></div>
+
+      <div class="form-row">
+        <div>
+          <label for="price">价格（可选，单位：元）</label>
+          <input id="price" type="number" min="0" step="0.01" placeholder="例如：500">
         </div>
-      </aside>
-    </main>
-  </div>
-
-  <!-- 观众台 -->
-  <div id="watch" class="app hidden">
-    <header>
-      <span id="w-dot" class="dot"></span>
-      <span id="w-room" class="title">room</span>
-      <span id="w-status" class="status">连接中…</span>
-      <span class="spacer"></span>
-      <button id="w-leave" class="btn ghost">退出</button>
-    </header>
-    <main>
-      <section class="stage">
-        <video id="remote-video" autoplay playsinline></video>
-        <div id="w-placeholder" class="placeholder">等待主播开播…<br>画面与声音通过 WebRTC 端到端加密传输</div>
-      </section>
-      <aside class="side">
-        <h3>聊天</h3>
-        <div id="w-chat" class="msgs"></div>
-        <div class="inputbar">
-          <input id="w-msg" type="text" maxlength="500" placeholder="说点什么…" autocomplete="off">
-          <button id="w-send" class="btn primary">发送</button>
+        <div>
+          <label for="contact">联系方式（微信 / 电话）</label>
+          <input id="contact" type="text" maxlength="60" placeholder="例如：微信 abc123">
         </div>
-      </aside>
-    </main>
+      </div>
+
+      <label for="message">留言内容</label>
+      <textarea id="message" maxlength="1000" placeholder="简单介绍一下这个视频/图片，以及有什么要求…"></textarea>
+
+      <div class="submit-wrap">
+        <button id="submit" class="btn primary block">提交留言</button>
+        <div class="status-bar" id="status"></div>
+      </div>
+    </div>
+
+    <!-- 留言列表 -->
+    <div class="section-title">
+      最新留言
+      <span class="cnt" id="cnt">0</span>
+      <button id="refresh" class="btn ghost refresh">刷新</button>
+    </div>
+    <div class="empty hidden" id="empty">还没有留言，快来发布第一条吧</div>
+    <div class="grid" id="list"></div>
   </div>
 
   <div id="toast"></div>
-  <script src="./bundle.js?v=1"></script>
+  <script src="./bundle.js?v=2"></script>
 </body>
 </html>
