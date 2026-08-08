@@ -119,6 +119,8 @@
     .status-bar .ok { color: var(--green); }
     .status-bar .err { color: var(--danger); }
 
+    .badge-on { display: inline-block; background: #def7ec; color: #0a7a3d; font-size: 12px; padding: 4px 12px; border-radius: 20px; margin-top: 8px; }
+
     /* posts */
     .section-title {
       display: flex;
@@ -137,6 +139,37 @@
       border-radius: 20px;
     }
     .refresh { margin-left: auto; font-size: 12px; padding: 7px 12px; }
+    .owner-link { font-size: 12px; padding: 7px 12px; }
+
+    /* owner modal */
+    .owner-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .owner-mask { position: absolute; inset: 0; background: rgba(15, 20, 32, .5); }
+    .owner-card {
+      position: relative;
+      background: var(--card);
+      width: min(100%, 520px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(15, 20, 32, .35);
+    }
+    .owner-card h3 { margin-bottom: 10px; }
+    .owner-card .owner-tip { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+    .owner-card textarea {
+      width: 100%;
+      min-height: 150px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+    }
+    .owner-card textarea:focus { border-color: var(--accent); }
+    .owner-btns { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .owner-btns .btn { flex: 1; }
+    .owner-btns label.btn { display: inline-flex; align-items: center; justify-content: center; }
+    .owner-card .status-bar { text-align: left; color: var(--muted); font-size: 13px; min-height: 18px; margin-top: 12px; }
 
     .empty {
       text-align: center;
@@ -216,7 +249,8 @@
   <div class="wrap">
     <div class="hero">
       <h1>留言板</h1>
-      <div class="sub">上传视频或图片，写明价格与联系方式。<br>提交成功后会自动保存到网站后台(GitHub)，其他人即可看到并联系你。</div>
+      <div class="sub">上传视频或图片，写明价格与联系方式。留言内容会先在浏览器中加密，再保存到后台——任何人都无法在服务器上看到明文，只有站长用私钥解锁后才能查看。</div>
+      <div class="badge-on hidden" id="ownerlock-badge">🔓 站长已解锁，可查看全部留言</div>
     </div>
 
     <!-- 发布表单 -->
@@ -255,6 +289,7 @@
     <div class="section-title">
       最新留言
       <span class="cnt" id="cnt">0</span>
+      <button id="owner-btn" class="btn ghost owner-link">🔑 站长查看</button>
       <button id="refresh" class="btn ghost refresh">刷新</button>
     </div>
     <div class="empty hidden" id="empty">还没有留言，快来发布第一条吧</div>

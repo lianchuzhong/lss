@@ -17,6 +17,9 @@ export default {
       if (method === 'POST' && url.pathname === '/api/post') {
         return await apiCreatePost(request, env)
       }
+      if (method === 'GET' && url.pathname === '/api/media') {
+        return await apiProxyMedia(env, url.searchParams.get('path'))
+      }
       return json({ error: 'Not Found' }, 404)
     } catch (err) {
       console.error('worker error', err)
@@ -33,9 +36,9 @@ function corsHeaders() {
   }
 }
 
-function json(obj, status = 200) {
+function json(obj, status) {
   return new Response(JSON.stringify(obj), {
-    status,
+    status: status || 200,
     headers: { 'Content-Type': 'application/json', ...corsHeaders() },
   })
 }
@@ -82,17 +85,6 @@ function bytesToBase64(bytes) {
   return btoa(bin)
 }
 
-function safeExt(fileName) {
-  const m = /\.([a-zA-Z0-9]{2,5})$/.exec((fileName || '').split('\\').pop().split('/').pop())
-  return m ? m[1].toLowerCase() : 'bin'
-}
-
-function mediaType(mime) {
-  if (/^image\//.test(mime || '')) return 'image'
-  if (/^video\//.test(mime || '')) return 'video'
-  return 'file'
-}
-
 async function apiListPosts(env) {
   const dir = await ghGet(env, 'data/posts')
   const posts = []
@@ -114,14 +106,14 @@ async function apiListPosts(env) {
 
 async function apiCreatePost(request, env) {
   const form = await request.formData()
-  const name = String(form.get('name') || '').trim().slice(0, 20)
-  const price = String(form.get('price') || '').trim().slice(0, 20)
-  const contact = String(form.get('contact') || '').trim().slice(0, 60)
-  const message = String(form.get('message') || '').trim().slice(0, 1000)
+  const encRaw = String(form.get('enc') || '').trim()
   const file = form.get('file')
 
-  if (!message && !price && !contact) {
-    return json({ error: '请填写留言内容或价格/联系方式' }, 400)
+  if (!encRaw) {
+    return json({ error: '缺少加密负载' }, 400)
+  }
+  if (encRaw.length > 20000) {
+    return json({ error: '加密数据过大' }, 400)
   }
 
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -132,24 +124,40 @@ async function apiCreatePost(request, env) {
     if (file.size > 95 * 1024 * 1024) {
       return json({ error: '文件过大，单个文件最大 95MB' }, 400)
     }
-    if (!/^image\//.test(file.type || '') && !/^video\//.test(file.type || '')) {
-      return json({ error: '仅支持图片或视频文件' }, 400)
-    }
-    const ext = safeExt(file.name)
-    const mediaPath = `uploads/${id}.${ext}`
+    const mediaPath = `uploads/${id}.bin`
     const buf = await file.arrayBuffer()
     const bytes = new Uint8Array(buf)
     await ghPut(env, mediaPath, bytesToBase64(bytes), null, 'add upload ' + id)
     media = {
-      file: file.name,
-      type: mediaType(file.type),
+      file: 'media.bin',
       size: file.size,
-      url: rawUrl(env, mediaPath),
+      type: 'enc',
+      path: mediaPath,
     }
   }
 
-  const post = { id, name: name || '匿名', price, contact, message, media, createdAt }
-  const postJson = JSON.stringify(post)
-  await ghPut(env, `data/posts/${id}.json`, bytesToBase64(new TextEncoder().encode(postJson)), null, 'add post ' + id)
+  const post = { id, enc: encRaw, media, createdAt }
+  await ghPut(env, `data/posts/${id}.json`, bytesToBase64(new TextEncoder().encode(JSON.stringify(post))), null, 'add post ' + id)
   return json({ ok: true, id })
+}
+
+async function apiProxyMedia(env, path) {
+  if (!path || !/^uploads\/[a-zA-Z0-9._-]+\.bin$/.test(path)) {
+    return json({ error: 'invalid path' }, 400)
+  }
+  const res = await fetch(rawUrl(env, path), {
+    headers: { 'User-Agent': 'lss-board-worker' },
+  })
+  if (!res.ok) {
+    return json({ error: 'media not found' }, 404)
+  }
+  const buf = await res.arrayBuffer()
+  return new Response(buf, {
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Cache-Control': 'no-store',
+    },
+  })
 }
