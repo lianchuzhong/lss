@@ -1,5 +1,12 @@
-const WORKER_BASE = 'https://lss-board.lssboard.workers.dev'
-const MAX_FILE_MB = 90
+import mqtt from 'mqtt'
+
+const BROKERS = [
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
+]
+const TOPIC_PREFIX = 'lss/board/'
+const MAX_MEDIA_BYTES = 450 * 1024
+const MAX_PAYLOAD_BYTES = 620 * 1024
 
 const OWNER_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3CxtqUliQkJkfmh31i0E
@@ -37,35 +44,8 @@ async function newAesKey() {
   return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'])
 }
 
-async function buildEncrypted(pubKey, payload, file) {
-  const aes = await newAesKey()
-  const metaIv = crypto.getRandomValues(new Uint8Array(12))
-  const metaCt = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: metaIv },
-    aes,
-    new TextEncoder().encode(JSON.stringify(payload))
-  )
-
-  let media = null
-  let fileBlob = null
-  if (file && file.size) {
-    const buf = await file.arrayBuffer()
-    const fileIv = crypto.getRandomValues(new Uint8Array(12))
-    const fileCt = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: fileIv }, aes, buf)
-    fileBlob = new Blob([fileCt], { type: 'application/octet-stream' })
-    media = { iv: bytesToBase64(fileIv), size: file.size }
-  }
-
-  const wrapped = await crypto.subtle.wrapKey('raw', aes, pubKey, { name: 'RSA-OAEP', hash: 'SHA-256' })
-
-  const enc = {
-    v: 1,
-    alg: 'RSA-OAEP-256/AES-256-GCM',
-    wrapped: bytesToBase64(new Uint8Array(wrapped)),
-    meta: { iv: bytesToBase64(metaIv), ct: bytesToBase64(new Uint8Array(metaCt)) },
-    media,
-  }
-  return { enc: bytesToBase64(new TextEncoder().encode(JSON.stringify(enc))), fileBlob }
+function uid() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
 }
 
 function toast(msg) {
@@ -73,7 +53,7 @@ function toast(msg) {
   if (!el) return
   el.textContent = msg
   el.classList.add('show')
-  setTimeout(() => el.classList.remove('show'), 2600)
+  setTimeout(() => el.classList.remove('show'), 3200)
 }
 
 function fmtSize(bytes) {
@@ -117,9 +97,63 @@ function renderPreview() {
   previewEl.appendChild(wrap)
 }
 
-function setStatus(text) {
+async function shrinkImage(file) {
+  const img = await new Promise((resolve, reject) => {
+    const u = URL.createObjectURL(file)
+    const im = new Image()
+    im.onload = () => { URL.revokeObjectURL(u); resolve(im) }
+    im.onerror = reject
+    im.src = u
+  })
+  let { naturalWidth: w, naturalHeight: h } = img
+  const MAX = 1200
+  if (w > MAX || h > MAX) {
+    const r = Math.min(1, MAX / Math.max(w, h))
+    w = Math.round(w * r); h = Math.round(h * r)
+  }
+  let bytes = null
+  for (const q of [0.85, 0.7, 0.55, 0.4]) {
+    const c = document.createElement('canvas')
+    c.width = w; c.height = h
+    c.getContext('2d').drawImage(img, 0, 0, w, h)
+    bytes = await new Promise((resolve) => {
+      c.toBlob((b) => resolve(b), 'image/jpeg', q)
+    })
+    if (bytes && bytes.size <= MAX_MEDIA_BYTES) break
+  }
+  return { bytes, finalSize: bytes ? bytes.size : 0 }
+}
+
+function setStatus(text, cls) {
   statusEl.textContent = text
-  statusEl.className = 'status-bar'
+  statusEl.className = 'status-bar' + (cls ? ' ' + cls : '')
+}
+
+let client = null
+let clientReady = false
+
+async function ensureClient() {
+  if (client && clientReady) return
+  if (client) {
+    await new Promise((res) => {
+      const timer = setInterval(() => {
+        if (clientReady) { clearInterval(timer); res() }
+      }, 200)
+    })
+    return
+  }
+  await new Promise((resolve, reject) => {
+    client = mqtt.connect(BROKERS[0], {
+      clientId: 'lssb-' + Math.random().toString(36).slice(2, 12),
+      reconnectPeriod: 3000,
+      connectTimeout: 20000,
+    })
+    client.on('connect', () => { clientReady = true; resolve() })
+    client.on('error', () => {})
+    client.on('offline', () => { clientReady = false })
+    client.on('close', () => { clientReady = false })
+    setTimeout(() => reject(new Error('连接服务器超时')), 25000)
+  })
 }
 
 async function postMessage() {
@@ -132,32 +166,94 @@ async function postMessage() {
     return
   }
   if (selectedFile && selectedFile.size > 90 * 1024 * 1024) {
-    toast('文件过大，单个文件最大 90MB')
+    toast('文件过大，请先压缩后再上传')
     return
+  }
+
+  let mediaBytes = null
+  let mediaName = ''
+  let mediaMime = ''
+  let mediaUnderLimit = true
+  if (selectedFile) {
+    mediaName = selectedFile.name
+    mediaMime = selectedFile.type || 'application/octet-stream'
+    if (/^image\//.test(mediaMime)) {
+      const r = await shrinkImage(selectedFile)
+      mediaBytes = r.bytes
+      mediaUnderLimit = r.finalSize > 0
+    } else {
+      mediaBytes = selectedFile
+      mediaUnderLimit = selectedFile.size <= MAX_MEDIA_BYTES
+    }
+    if (!mediaUnderLimit) {
+      toast('图片/视频超过上限（约 500KB），请压缩后再提交')
+      return
+    }
   }
 
   posting = true
   submitBtn.disabled = true
-  setStatus('正在加密并提交，请稍候…')
+  setStatus('正在加密并投递留言，请稍候…')
   try {
     const pubKey = await importOwnerPublicKey()
-    const payload = {
+    const aes = await newAesKey()
+
+    const metaRaw = JSON.stringify({
       name: nameEl.value.trim() || '匿名',
       price,
       contact,
       message,
-      media: selectedFile ? { name: selectedFile.name, mime: selectedFile.type, size: selectedFile.size } : null,
+      media: selectedFile ? { name: mediaName, mime: mediaMime, size: selectedFile.size } : null,
+    })
+    const metaIv = crypto.getRandomValues(new Uint8Array(12))
+    const metaCt = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: metaIv },
+      aes,
+      new TextEncoder().encode(metaRaw)
+    )
+
+    let mediaIvB64 = null
+    let mediaCipher = null
+    let mediaSize = 0
+    if (selectedFile && mediaBytes) {
+      const buf = mediaBytes instanceof ArrayBuffer ? new Uint8Array(mediaBytes) : new Uint8Array(await mediaBytes.arrayBuffer())
+      mediaSize = buf.length
+      const fileIv = crypto.getRandomValues(new Uint8Array(12))
+      const fileCt = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: fileIv }, aes, buf)
+      mediaIvB64 = bytesToBase64(fileIv)
+      mediaCipher = bytesToBase64(new Uint8Array(fileCt))
     }
-    const { enc, fileBlob } = await buildEncrypted(pubKey, payload, selectedFile)
 
-    const fd = new FormData()
-    fd.append('enc', enc)
-    if (fileBlob) fd.append('file', fileBlob, 'media.bin')
+    const wrapped = await crypto.subtle.wrapKey('raw', aes, pubKey, { name: 'RSA-OAEP', hash: 'SHA-256' })
 
-    const res = await fetch(WORKER_BASE + '/api/post', { method: 'POST', body: fd })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || '提交失败')
-    setStatus('提交成功，感谢留言！')
+    const envelope = {
+      v: 1,
+      id: uid(),
+      createdAt: Date.now(),
+      wrapped: bytesToBase64(new Uint8Array(wrapped)),
+      metaIv: bytesToBase64(metaIv),
+      metaCt: bytesToBase64(new Uint8Array(metaCt)),
+      mediaIv: mediaIvB64,
+      mediaSize,
+      mediaCipher,
+      mediaName: mediaName ? encodeURIComponent(mediaName) : null,
+      mediaMime: mediaMime ? encodeURIComponent(mediaMime) : null,
+    }
+    const payloadRaw = JSON.stringify(envelope)
+    if (new TextEncoder().encode(payloadRaw).length > MAX_PAYLOAD_BYTES) {
+      throw new Error('内容超过大小上限，请精简留言内容')
+    }
+
+    await ensureClient()
+    await new Promise((resolve, reject) => {
+      const topic = TOPIC_PREFIX + envelope.id
+      client.publish(topic, payloadRaw, { qos: 1, retain: true }, (err) => {
+        if (err) reject(err)
+        else resolve()
+      })
+    })
+
+    setStatus('提交成功，留言已安全送达', 'ok')
     toast('提交成功')
     selectedFile = null
     fileEl.value = ''
@@ -167,7 +263,7 @@ async function postMessage() {
     nameEl.value = ''
     renderPreview()
   } catch (err) {
-    setStatus('提交失败：' + err.message)
+    setStatus('提交失败：' + err.message, 'err')
     toast('提交失败：' + err.message)
   } finally {
     posting = false
