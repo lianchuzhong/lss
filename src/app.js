@@ -9,6 +9,9 @@ const TOPIC_PREFIX = 'lss/board/'
 const MAX_MEDIA_BYTES = 450 * 1024
 const MAX_PAYLOAD_BYTES = 620 * 1024
 
+const seenIds = new Set()
+let counterEl = null
+
 const OWNER_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3CxtqUliQkJkfmh31i0E
 UGUihnthDqzOecJt/AuWQQXRRNVAgThSxpjUefS/mu5/ut5sWH0aXOp0BNrXoa0T
@@ -130,6 +133,24 @@ function setStatus(text, cls) {
   statusEl.className = 'status-bar' + (cls ? ' ' + cls : '')
 }
 
+function onBoardMessage(topic, payload) {
+  if (topic.indexOf(TOPIC_PREFIX) !== 0) return
+  let m = null
+  try { m = JSON.parse(payload.toString()) } catch (_) {}
+  if (!m || !m.id) return
+  const before = seenIds.size
+  seenIds.add(m.id)
+  if (seenIds.size !== before) renderCount()
+}
+
+function renderCount() {
+  if (!counterEl) {
+    counterEl = document.getElementById('msgCount')
+    if (counterEl) counterEl.style.display = 'inline-block'
+  }
+  if (counterEl) counterEl.textContent = '已收到留言 ' + seenIds.size + ' 条（实时更新）'
+}
+
 let client = null
 let clientReady = false
 
@@ -180,12 +201,18 @@ async function ensureClient() {
     try {
       const c = await connectOne(url)
       c.options.reconnectPeriod = 3000
-      c.on('connect', () => { clientReady = true })
+      c.on('connect', () => {
+        clientReady = true
+        try { c.subscribe(TOPIC_PREFIX + '#') } catch (_) {}
+      })
+      c.on('message', onBoardMessage)
       c.on('offline', () => { clientReady = false })
       c.on('close', () => { clientReady = false })
       c.on('error', () => {})
       client = c
       clientReady = true
+      try { c.subscribe(TOPIC_PREFIX + '#') } catch (_) {}
+      renderCount()
       return
     } catch (err) {
       lastErr = err
@@ -310,7 +337,10 @@ const topic = TOPIC_PREFIX + envelope.id
       throw new Error(msg)
     }
 
-    setStatus('提交成功，留言已安全送达', 'ok')
+seenIds.add(envelope.id)
+    renderCount()
+    const ordinal = Math.max(1, seenIds.size)
+    setStatus('提交成功，您是第 ' + ordinal + ' 位成功留言的访客，编码 #' + envelope.id, 'ok')
     toast('提交成功')
     selectedFile = null
     fileEl.value = ''
@@ -362,3 +392,5 @@ dropEl.addEventListener('drop', (e) => {
   }
 })
 submitBtn.addEventListener('click', postMessage)
+
+ensureClient().then(renderCount).catch(() => {})
