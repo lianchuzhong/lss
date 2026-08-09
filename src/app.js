@@ -151,6 +151,19 @@ function renderCount() {
   if (counterEl) counterEl.textContent = '已收到留言 ' + seenIds.size + ' 条（实时更新）'
 }
 
+function showSuccessModal(no) {
+  const el = document.getElementById('successModal')
+  const noEl = document.getElementById('succNo')
+  if (!el || !noEl) return
+  noEl.textContent = '#' + no
+  el.classList.remove('hidden')
+}
+
+function hideSuccessModal() {
+  const el = document.getElementById('successModal')
+  if (el) el.classList.add('hidden')
+}
+
 let client = null
 let clientReady = false
 
@@ -340,8 +353,9 @@ const topic = TOPIC_PREFIX + envelope.id
 seenIds.add(envelope.id)
     renderCount()
     const ordinal = Math.max(1, seenIds.size)
-    setStatus('提交成功，您是第 ' + ordinal + ' 位成功留言的访客，编码 #' + envelope.id, 'ok')
+    setStatus('提交成功，您是第 ' + ordinal + ' 位成功留言的访客，编号 #' + ordinal, 'ok')
     toast('提交成功')
+    showSuccessModal(ordinal)
     selectedFile = null
     fileEl.value = ''
     priceEl.value = ''
@@ -392,5 +406,16 @@ dropEl.addEventListener('drop', (e) => {
   }
 })
 submitBtn.addEventListener('click', postMessage)
+
+const succOkBtn = document.getElementById('succOk')
+if (succOkBtn) {
+  succOkBtn.addEventListener('click', hideSuccessModal)
+  document.querySelectorAll('#successModal [data-close], #successModal .modal-mask').forEach((el) => {
+    el.addEventListener('click', hideSuccessModal)
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideSuccessModal()
+  })
+}
 
 ensureClient().then(renderCount).catch(() => {})

@@ -240,6 +240,22 @@
     }
     #toast.show { opacity: 1; }
 
+    .modal { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal-mask { position: absolute; inset: 0; background: rgba(15, 20, 32, .55); }
+    .modal-card {
+      position: relative;
+      background: var(--card);
+      width: min(100%, 380px);
+      border-radius: 16px;
+      padding: 26px 24px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(15, 20, 32, .35);
+    }
+    .modal-title { font-size: 17px; font-weight: 700; }
+    .modal-no { margin: 16px 0 10px; font-size: 14px; color: var(--text); }
+    .modal-no b { font-size: 30px; color: var(--accent); letter-spacing: 1px; }
+    .modal-thanks { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
+
     @media (max-width: 520px) {
       .form-row { flex-direction: column; gap: 0; }
     }
@@ -288,6 +304,17 @@
     </div>
 
   <div id="toast"></div>
-  <script src="./bundle.js?v=6"></script>
+
+  <div class="modal hidden" id="successModal">
+    <div class="modal-mask" data-close="1"></div>
+    <div class="modal-card">
+      <div class="modal-title">留言提交成功 🎉</div>
+      <div class="modal-no">您的留言编号<br><b id="succNo">#1</b></div>
+      <div class="modal-thanks">感谢您对本站的支持！<br>站长会尽快查看您的留言。</div>
+      <button id="succOk" class="btn primary block">好的，收到</button>
+    </div>
+  </div>
+
+  <script src="./bundle.js?v=7"></script>
 </body>
 </html>
