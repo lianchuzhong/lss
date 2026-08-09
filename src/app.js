@@ -1,6 +1,7 @@
 import mqtt from 'mqtt'
 
 const BROKERS = [
+  'wss://broker-cn.emqx.io:8084/mqtt',
   'wss://broker.emqx.io:8084/mqtt',
   'wss://broker.hivemq.com:8884/mqtt',
 ]
@@ -132,28 +133,66 @@ function setStatus(text, cls) {
 let client = null
 let clientReady = false
 
+function connectOne(url) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const probe = mqtt.connect(url, {
+      clientId: 'lssb-' + Math.random().toString(36).slice(2, 12),
+      reconnectPeriod: 0,
+      connectTimeout: 10000,
+    })
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try { probe.end(true) } catch (_) {}
+      reject(new Error('连接超时'))
+    }, 12000)
+    const done = (fn, arg) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      fn(arg)
+    }
+    probe.on('connect', () => done(resolve, probe))
+    probe.on('error', () => {})
+    probe.on('close', () => done(reject, new Error('连接失败')))
+  })
+}
+
 async function ensureClient() {
   if (client && clientReady) return
   if (client) {
-    await new Promise((res) => {
-      const timer = setInterval(() => {
-        if (clientReady) { clearInterval(timer); res() }
+    await new Promise((res, rej) => {
+      const inter = setInterval(() => {
+        if (clientReady) { clearInterval(inter); res() }
       }, 200)
+      setTimeout(() => {
+        clearInterval(inter)
+        try { client.end(true) } catch (_) {}
+        client = null
+        rej(new Error('连接恢复超时，请重试'))
+      }, 18000)
     })
     return
   }
-  await new Promise((resolve, reject) => {
-    client = mqtt.connect(BROKERS[0], {
-      clientId: 'lssb-' + Math.random().toString(36).slice(2, 12),
-      reconnectPeriod: 3000,
-      connectTimeout: 20000,
-    })
-    client.on('connect', () => { clientReady = true; resolve() })
-    client.on('error', () => {})
-    client.on('offline', () => { clientReady = false })
-    client.on('close', () => { clientReady = false })
-    setTimeout(() => reject(new Error('连接服务器超时')), 25000)
-  })
+  let lastErr = null
+  for (const url of BROKERS) {
+    try {
+      const c = await connectOne(url)
+      c.options.reconnectPeriod = 3000
+      c.on('connect', () => { clientReady = true })
+      c.on('offline', () => { clientReady = false })
+      c.on('close', () => { clientReady = false })
+      c.on('error', () => {})
+      client = c
+      clientReady = true
+      return
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  client = null
+  throw new Error((lastErr && lastErr.message) || '无法连接消息服务器')
 }
 
 async function postMessage() {
@@ -244,14 +283,32 @@ async function postMessage() {
       throw new Error('内容超过大小上限，请精简留言内容')
     }
 
-    await ensureClient()
-    await new Promise((resolve, reject) => {
-      const topic = TOPIC_PREFIX + envelope.id
-      client.publish(topic, payloadRaw, { qos: 1, retain: true }, (err) => {
-        if (err) reject(err)
-        else resolve()
-      })
-    })
+const topic = TOPIC_PREFIX + envelope.id
+    let lastErr = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) client = null
+      try {
+        await ensureClient()
+        await new Promise((resolve, reject) => {
+          client.publish(topic, payloadRaw, { qos: 1, retain: true }, (err) => {
+            if (err) reject(err)
+            else resolve()
+          })
+        })
+        lastErr = null
+        break
+      } catch (err) {
+        lastErr = err
+        clientReady = false
+        client = null
+      }
+    }
+    if (lastErr) {
+      const msg = /network|fetch/i.test((lastErr && lastErr.message) || '')
+        ? '网络连接失败，请检查网络后重试'
+        : (lastErr && lastErr.message) || '发送失败，请重试'
+      throw new Error(msg)
+    }
 
     setStatus('提交成功，留言已安全送达', 'ok')
     toast('提交成功')
