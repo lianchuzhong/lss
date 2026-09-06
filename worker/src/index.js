@@ -104,6 +104,26 @@ async function apiListPosts(env) {
   return json({ posts })
 }
 
+async function notifyGitHubIssue(env, id, createdAt) {
+  const title = `新留言通知 - 编号 #${id}`
+  const body = `## 用户留言通知\n\n- **留言编号**: #${id}\n- **提交时间**: ${new Date(createdAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\n---\n\n请登录后台查看留言内容。`
+
+  try {
+    const res = await fetch(`${GITHUB_HOST}/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/issues`, {
+      method: 'POST',
+      headers: ghHeaders(env.GITHUB_TOKEN),
+      body: JSON.stringify({ title, body }),
+    })
+    if (res.ok) {
+      console.log(`[GitHub通知] 已创建 Issue: ${title}`)
+    } else {
+      console.log(`[GitHub通知] 创建失败: ${res.status}`)
+    }
+  } catch (e) {
+    console.log(`[GitHub通知] 错误: ${e.message}`)
+  }
+}
+
 async function apiCreatePost(request, env) {
   const form = await request.formData()
   const encRaw = String(form.get('enc') || '').trim()
@@ -138,6 +158,9 @@ async function apiCreatePost(request, env) {
 
   const post = { id, enc: encRaw, media, createdAt }
   await ghPut(env, `data/posts/${id}.json`, bytesToBase64(new TextEncoder().encode(JSON.stringify(post))), null, 'add post ' + id)
+  
+  notifyGitHubIssue(env, id, createdAt)
+  
   return json({ ok: true, id })
 }
 
