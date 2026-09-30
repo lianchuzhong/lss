@@ -1,1 +1,4 @@
 node_modules/
+bark.config.json
+*.pem
+selftest.tmp.mjs
