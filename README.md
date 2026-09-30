@@ -77,14 +77,36 @@ npm run build      # 生成 bundle.js
 
 提交并推送到默认分支（`main`），GitHub Pages 自动生效。需在仓库 Settings → Pages 中开启，Source 选择主分支根目录。
 
-### 4. 手机推送（Bark）
+### 5. 手机推送（Bark，推荐）
 
 1. App Store / 应用市场安装 **Bark**（iOS / Android 均可）
 2. 打开 App 得到自己的服务器地址与 device key，例如 `https://api.day.app` + `xxxxxxxx`
-3. `npx wrangler secret put BARK_KEY` 填入 device key（想更稳定可自建 Bark 服务器，再 `wrangler secret put BARK_URL`）
+3. 两种配置方式，任选其一：
+
+**方式 A：Cloudflare Worker 推送（24/7，不需要电脑开机）**
+
+```bash
+npx wrangler secret put BARK_KEY         # 粘贴 device key
+npx wrangler secret put GITHUB_TOKEN
+npx wrangler secret put ADMIN_TOKEN
+npx wrangler deploy
+```
+
+**方式 B：本机监听脚本推送（零云端，5 分钟搞定，电脑需保持开机）**
+
+```bash
+copy tools\bark.config.example.json bark.config.json
+notepad bark.config.json      # 填 barkKey；填了 privateKeyPath 则通知含明文内容
+npm run notify
+```
+
+脚本会订阅站点的新留言，用你的私钥解密后把「编号 / 昵称 / 价格 / 联系方式 / 留言」推送到手机（启动时先发一条测试通知确认 key 正确）。想开机自启可用 `schtasks /create /sc onlogon /tn lss-bark /tr "node E:\桌面1\lss\lss-main\tools\bark-notify.mjs"`。
+
+> 注意：方式 B 走公共 MQTT 通道，未配置 `DEFAULT_WORKER_BASE` 的访客留言会经过该通道，因此能收到；一旦改用 Worker 提交，留言不再进 MQTT，方式 B 就收不到了（此时用方式 A）。两者可并存：Worker 负责落库+通知，脚本作为本地备份。
+
 4. 站点 →「🔑 站长查看」→ 填 `ADMIN_TOKEN` → 点「向所有通道发送测试通知」，1 秒内手机应收到
 
-### 5. 站长查看留言
+### 4. 站长查看留言
 
 1. 拿到 `留言板站长私钥.pem`（PKCS#8 或 PKCS#1 均可导入）
 2. 站点 →「🔑 站长查看」→ 粘贴私钥或选择 `.pem` 文件 → 「解锁查看」
