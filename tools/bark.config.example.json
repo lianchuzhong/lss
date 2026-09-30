@@ -1,0 +1,8 @@
+{
+  "barkKey": "在这里填 Bark App 里的 device key",
+  "barkUrl": "https://api.day.app",
+  "barkGroup": "lss-board",
+  "barkSound": "minuet.caf",
+  "privateKeyPath": "留言板站长私钥.pem",
+  "siteUrl": "https://lianchuzhong.github.io/lss"
+}
