@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>留言板站长密钥生成器</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f4f6fb; color: #1f2430; padding: 24px 12px 60px; }
+    .wrap { width: min(100%, 760px); margin: 0 auto; }
+    .card { background: #fff; border-radius: 16px; box-shadow: 0 12px 40px rgba(31,41,55,.12); padding: 24px; margin-bottom: 20px; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    h2 { font-size: 15px; margin: 18px 0 8px; }
+    p, li { font-size: 14px; line-height: 1.8; color: #5b647a; }
+    ul { padding-left: 20px; }
+    .warn { background: #fff7e6; color: #b45309; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.8; margin: 12px 0; }
+    .btn { border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; padding: 11px 18px; background: #3b82f6; color: #fff; }
+    .btn.ghost { background: #fff; color: #3b82f6; border: 1px solid #e5e9f2; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    textarea, input { width: 100%; padding: 11px 14px; border: 1px solid #e5e9f2; border-radius: 10px; font-size: 13px; font-family: ui-monospace, Consolas, monospace; resize: vertical; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .secret { background: #0f1420; color: #d7e0f5; }
+    code { background: #eef1f7; border-radius: 6px; padding: 2px 6px; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>留言板站长密钥生成器</h1>
+    <p>在浏览器本地生成 RSA-2048（RSA-OAEP / SHA-256）密钥对，用于留言板的端到端加密。私钥永远不会离开这台设备。</p>
+    <div class="warn">
+      仅在 <b>原私钥已彻底丢失</b> 时才重新生成。生成新密钥后必须把下面的公钥替换进 <code>src/app.js</code> 的 <code>OWNER_PUBLIC_KEY_PEM</code> 并重新构建，<b>此前所有留言将无法解密</b>。如果只是想找回，请先尝试恢复原 <code>留言板站长私钥.pem</code>。
+    </div>
+    <div class="row">
+      <button id="gen" class="btn">生成密钥对</button>
+    </div>
+  </div>
+
+  <div class="card" id="out" style="display:none">
+    <h2>公钥（可公开，替换进 src/app.js）</h2>
+    <textarea id="pub" rows="8"></textarea>
+    <div class="row">
+      <button class="btn ghost" data-copy="pub">复制公钥</button>
+      <button class="btn ghost" id="dlPub">下载 public.pem</button>
+    </div>
+
+    <h2>私钥（绝对保密，勿提交仓库、勿发任何人）</h2>
+    <textarea id="priv" class="secret" rows="12"></textarea>
+    <div class="row">
+      <button class="btn ghost" data-copy="priv">复制私钥</button>
+      <button class="btn ghost" id="dlPriv">下载 留言板站长私钥.pem</button>
+    </div>
+    <p style="margin-top:12px">保存好私钥后，回到站点点「🔑 站长查看」→ 粘贴或选择该 .pem 文件即可解密全部留言。</p>
+  </div>
+</div>
+
+<script>
+  const b64 = (buf) => {
+    const bytes = new Uint8Array(buf)
+    let bin = ''
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+    return btoa(bin)
+  }
+  const pem = (label, b64body) => `-----BEGIN ${label}-----\n${b64body.match(/.{1,64}/g).join('\n')}\n-----END ${label}-----`
+
+  async function generate() {
+    const btn = document.getElementById('gen')
+    btn.disabled = true
+    btn.textContent = '生成中…'
+    try {
+      const pair = await crypto.subtle.generateKey(
+        { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+        true,
+        ['encrypt', 'decrypt']
+      )
+      const pub = await crypto.subtle.exportKey('spki', pair.publicKey)
+      const priv = await crypto.subtle.exportKey('pkcs8', pair.privateKey)
+      document.getElementById('pub').value = pem('PUBLIC KEY', b64(pub))
+      document.getElementById('priv').value = pem('PRIVATE KEY', b64(priv))
+      document.getElementById('out').style.display = 'block'
+      btn.textContent = '重新生成'
+    } catch (err) {
+      alert('生成失败：' + err.message)
+      btn.textContent = '生成密钥对'
+    } finally {
+      btn.disabled = false
+    }
+  }
+
+  function download(name, text) {
+    const blob = new Blob([text + '\n'], { type: 'application/x-pem-file' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = name
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  }
+
+  document.getElementById('gen').addEventListener('click', generate)
+  document.getElementById('dlPub').addEventListener('click', () => download('public.pem', document.getElementById('pub').value))
+  document.getElementById('dlPriv').addEventListener('click', () => download('留言板站长私钥.pem', document.getElementById('priv').value))
+  document.querySelectorAll('[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.dataset.copy)
+      target.select()
+      try {
+        await navigator.clipboard.writeText(target.value)
+        btn.textContent = '已复制'
+        setTimeout(() => (btn.textContent = '复制'), 1500)
+      } catch (_) {
+        document.execCommand('copy')
+      }
+    })
+  })
+</script>
+</body>
+</html>
